@@ -1,6 +1,6 @@
 {
 	"required": true,
-	"package": "fr.madu59.bettercompass.mixin.client",
+	"package": "com.madu59_.mixin.client",
 	"compatibilityLevel": "JAVA_21",
 	"client": [
 		"FovMultiplierAccessor"
