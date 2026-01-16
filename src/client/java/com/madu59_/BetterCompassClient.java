@@ -11,6 +11,7 @@ import java.nio.file.*;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonParseException;
 import com.google.gson.reflect.TypeToken;
 import com.madu59_.config.ClientCommands;
 import com.madu59_.config.SettingsManager;
@@ -216,10 +217,20 @@ public class BetterCompassClient implements ClientModInitializer {
         try (Reader reader = Files.newBufferedReader(configPath)) {
             Type type = new TypeToken<Map<String, String>>() {}.getType();
 			valueMap = GSON.fromJson(reader, type);
+			// Handle case where JSON was empty or null
+			if (valueMap == null) {
+				valueMap = new LinkedHashMap<>();
+			}
         } catch (IOException e) {
-            e.printStackTrace();
+            // File doesn't exist yet, this is normal for first run
+			valueMap = new LinkedHashMap<>();
 			return;
-        }
+        } catch (JsonParseException e) {
+			// Config file has invalid format, reset to empty
+			System.err.println("[BetterCompass] Warning: Could not parse config file, resetting to defaults: " + e.getMessage());
+			valueMap = new LinkedHashMap<>();
+			return;
+		}
 
 		if(valueMap.containsKey("deathPointBlockPos")){
 			deathPointBlockPos = stringToBlockPos(valueMap.get("deathPointBlockPos"));

@@ -229,19 +229,30 @@ public class SettingsManager {
     }
 
     private static Option loadOption(String key) {
+        if (!Files.exists(CONFIG_PATH)) {
+            // Config file doesn't exist yet, this is normal for first run
+            return null;
+        }
         try (Reader reader = Files.newBufferedReader(CONFIG_PATH)) {
             Type type = new TypeToken<Map<String, Option>>() {}.getType();
             Map<String, Option> map = GSON.fromJson(reader, type);
+            if (map == null) {
+                return null;
+            }
             return map.get(key);
         } catch (IOException e) {
-            e.printStackTrace();
+            // Log briefly without full stack trace
+            System.err.println("[BetterCompass] Could not load config: " + e.getMessage());
+            return null;
+        } catch (Exception e) {
+            // Handle malformed JSON or other errors
+            System.err.println("[BetterCompass] Error parsing config file: " + e.getMessage());
             return null;
         }
     }
 
     private static Option loadOptionWithDefaults(String id, String name, String description, Object value, Object defaultValue, List<Object> possibleValues) {
         Option loadedOption = loadOption(id);
-        System.out.println("Loaded option for " + id + ": " + (loadedOption == null ? "null" : loadedOption.getValueAsString()));
         if (loadedOption == null) {
             return new Option(
                     id,
