@@ -12,7 +12,7 @@ import java.nio.file.*;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
-
+import com.madu59_.config.ClientCommands;
 import com.madu59_.config.SettingsManager;
 import com.madu59_.mixin.client.FovMultiplierAccessor;
 
@@ -47,7 +47,7 @@ public class BetterCompassClient implements ClientModInitializer {
 	private static final float GUI_WIDTH = 0.5F;
 
 	private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-	private static Map<String, Object> valueMap = new LinkedHashMap<>();
+	private static Map<String, String> valueMap = new LinkedHashMap<>();
 
 
 	private static RegistryKey<World> lastDimension = null;
@@ -59,6 +59,7 @@ public class BetterCompassClient implements ClientModInitializer {
 
 	@Override
 	public void onInitializeClient() {
+		ClientCommands.register();
 		// Attach our rendering code to before the chat hud layer. Our layer will render right before the chat. The API will take care of z spacing.
 		HudElementRegistry.attachElementBefore(VanillaHudElements.CHAT, Identifier.of(BetterCompass.MOD_ID, "before_chat"), BetterCompassClient::render);
 
@@ -66,8 +67,8 @@ public class BetterCompassClient implements ClientModInitializer {
 			if (client.player != null && client.player.isDead()) {
 				deathPointBlockPos = client.player.getBlockPos();
 				deathDimension = client.world.getRegistryKey();
-				valueMap.put("deathPointBlockPos", deathPointBlockPos);
-				valueMap.put("deathDimension", deathDimension);
+				valueMap.put("deathPointBlockPos", blockPosToString(deathPointBlockPos));
+				valueMap.put("deathDimension", registryKeyToString(deathDimension));
 				saveValues();
 			}
 			if (client.world != null) {
@@ -75,7 +76,7 @@ public class BetterCompassClient implements ClientModInitializer {
 				if (lastDimension != null && !lastDimension.equals(current)) {
 					if (current == World.NETHER) {
 						netherPortalBlockPos = client.player.getBlockPos();
-						valueMap.put("netherPortalBlockPos", netherPortalBlockPos);
+						valueMap.put("netherPortalBlockPos", blockPosToString(netherPortalBlockPos));
 						saveValues();
 					}
 					else{
@@ -145,10 +146,9 @@ public class BetterCompassClient implements ClientModInitializer {
 			color = SettingsManager.getRGBColorFromSetting(SettingsManager.LAST_DEATH_DIRECTION_COLOR.getValueAsString());
 			if(SettingsManager.LAST_DEATH_DIRECTION_POSITION.getValue().equals("Under")){deltaY = 0.03F; size = 0.8F;}
 			if(SettingsManager.LAST_DEATH_DIRECTION_POSITION.getValue().equals("Above")){deltaY = -0.03F; size = 0.8F;}
-			Vec3d playerPos = player.getPos();
 			Vec3d deathPos = new Vec3d(deathPointBlockPos.getX(), 0, deathPointBlockPos.getZ());
-			double dx = deathPos.x - playerPos.x;
-			double dz = deathPos.z - playerPos.z;
+			double dx = deathPos.x - player.getX();
+			double dz = deathPos.z - player.getZ();
 			drawCompassSymbol(context, textRenderer, fov, "💀", (float)(MathHelper.atan2(dz, dx) * (180 / Math.PI)) - 90, camDirection, compassPosition + deltaY, color, size);
 		}
 
@@ -159,10 +159,9 @@ public class BetterCompassClient implements ClientModInitializer {
 			color = SettingsManager.getRGBColorFromSetting(SettingsManager.NETHER_PORTAL_DIRECTION_COLOR.getValueAsString());
 			if(SettingsManager.NETHER_PORTAL_DIRECTION_POSITION.getValue().equals("Under")){deltaY = 0.03F; size = 0.8F;}
 			if(SettingsManager.NETHER_PORTAL_DIRECTION_POSITION.getValue().equals("Above")){deltaY = -0.03F; size = 0.8F;}
-			Vec3d playerPos = player.getPos();
 			Vec3d netherPortalPos = new Vec3d(netherPortalBlockPos.getX(), 0, netherPortalBlockPos.getZ());
-			double dx = netherPortalPos.x - playerPos.x;
-			double dz = netherPortalPos.z - playerPos.z;
+			double dx = netherPortalPos.x - player.getX();
+			double dz = netherPortalPos.z - player.getZ();
 			drawCompassSymbol(context, textRenderer, fov, "🌍", (float)(MathHelper.atan2(dz, dx) * (180 / Math.PI)) - 90, camDirection, compassPosition + deltaY, color, size);
 		}
 	}
@@ -215,37 +214,38 @@ public class BetterCompassClient implements ClientModInitializer {
 	private static void loadData() {
 		Path configPath = FabricLoader.getInstance().getConfigDir().resolve(serverId).resolve(BetterCompass.MOD_ID + ".json");
         try (Reader reader = Files.newBufferedReader(configPath)) {
-            Type type = new TypeToken<Map<String, Object>>() {}.getType();
+            Type type = new TypeToken<Map<String, String>>() {}.getType();
 			valueMap = GSON.fromJson(reader, type);
         } catch (IOException e) {
             e.printStackTrace();
 			return;
         }
 
-		Object raw = valueMap.get("deathDimension");
-		if (raw instanceof Map<?, ?> rawMap) {
-			Object valueRaw = rawMap.get("value");
-			if(valueRaw instanceof Map<?, ?> innerRawMap){
-				String namespace = (String) innerRawMap.get("namespace");
-				String path = (String) innerRawMap.get("path");
-				deathDimension = RegistryKey.<World>of(RegistryKeys.WORLD, Identifier.of(namespace,path));
-			}
+		if(valueMap.containsKey("deathPointBlockPos")){
+			deathPointBlockPos = stringToBlockPos(valueMap.get("deathPointBlockPos"));
 		}
-
-		raw = valueMap.get("deathPointBlockPos");
-		if (raw instanceof Map<?, ?> rawMap) {
-			int x = ((Double) rawMap.get("x")).intValue();
-			int y = ((Double) rawMap.get("y")).intValue();
-			int z = ((Double) rawMap.get("z")).intValue();
-			deathPointBlockPos = new BlockPos(x, y, z);
+		if(valueMap.containsKey("deathDimension")){
+			deathDimension = RegistryKey.of(RegistryKeys.WORLD, Identifier.tryParse(valueMap.get("deathDimension")));
 		}
-
-		raw = valueMap.get("netherPortalBlockPos");
-		if (raw instanceof Map<?, ?> rawMap) {
-			int x = ((Double) rawMap.get("x")).intValue();
-			int y = ((Double) rawMap.get("y")).intValue();
-			int z = ((Double) rawMap.get("z")).intValue();
-			netherPortalBlockPos = new BlockPos(x, y, z);
+		if(valueMap.containsKey("netherPortalBlockPos")){
+			netherPortalBlockPos = stringToBlockPos(valueMap.get("netherPortalBlockPos"));
 		}
     }
+
+	private static String blockPosToString(BlockPos pos){
+		return pos.getX() + "," + pos.getY() + "," + pos.getZ();
+	}
+
+	private static String registryKeyToString(RegistryKey<World> key){
+		return key.getValue().toString();
+	}
+
+	private static BlockPos stringToBlockPos(String str){
+		String[] coords = str.split(",");
+		return new BlockPos(
+			Integer.parseInt(coords[0]),
+			Integer.parseInt(coords[1]),
+			Integer.parseInt(coords[2])
+		);
+	}
 }
